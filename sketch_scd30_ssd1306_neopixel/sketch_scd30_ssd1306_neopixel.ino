@@ -11,6 +11,7 @@
 
 int PIN_WS2812 = 2;
 String disp;
+boolean started = false;
 int taux_co2;
 int red;
 int green;
@@ -35,7 +36,10 @@ void setup()
   
   ssd1306_128x64_i2c_init();
   ssd1306_fillScreen(0x00);
+  ssd1306_setFixedFont(ssd1306xled_font8x16);
+  ssd1306_printFixed (0,  8, "Real time CO2", STYLE_BOLD);
   ssd1306_setFixedFont(ssd1306xled_font6x8);
+  ssd1306_printFixed (0, 39, "Initializing...", STYLE_NORMAL);
 
   Wire.begin();
   Wire.setClock(50000); // 50kHz, recommended for SCD30
@@ -64,6 +68,13 @@ void measure() {
   }
     
   taux_co2 = airSensor.getCO2();
+  if (taux_co2 < 400) {
+    // happens at startup
+    return;
+  } else if (started == false) {
+    ssd1306_fillScreen(0x00);
+    started = true;
+  }
   temp = airSensor.getTemperature();
   dtostrf(temp, 4, 1, formattedTemp);
   int taux_hum = airSensor.getHumidity();
