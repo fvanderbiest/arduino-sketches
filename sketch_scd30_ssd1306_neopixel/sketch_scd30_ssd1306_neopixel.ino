@@ -25,8 +25,7 @@ SCD30 airSensor;
 Adafruit_NeoPixel neopixel = Adafruit_NeoPixel(NUMPIXELS, PIN_WS2812, NEO_GRB + NEO_KHZ800);
 Scheduler runner;
 
-void setup()
-{
+void setup() {
   Serial.begin(115200);
 
   neopixel.begin(); // INITIALIZE NeoPixel object (REQUIRED)
@@ -71,7 +70,8 @@ void measure() {
   if (taux_co2 < 400) {
     // happens at startup
     return;
-  } else if (started == false) {
+  }
+  if (started == false) {
     ssd1306_fillScreen(0x00);
     started = true;
   }
@@ -83,10 +83,10 @@ void measure() {
   disp = String(taux_co2) + " ppm";    
   ssd1306_printFixed (0,  8, disp.c_str(), STYLE_BOLD);
   ssd1306_setFixedFont(ssd1306xled_font6x8);
-  disp = "temperature : " + String(formattedTemp);
+  disp = "temperature: " + String(formattedTemp) + " C";
   ssd1306_printFixed (0,  39, disp.c_str(), STYLE_NORMAL);
 
-  disp = "humidite : " + String(taux_hum) + " %";
+  disp = "hygrometry: " + String(taux_hum) + " %";
   ssd1306_printFixed (0,  54, disp.c_str(), STYLE_NORMAL);
 
   if (taux_co2 < 600){
