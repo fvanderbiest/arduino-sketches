@@ -66,7 +66,6 @@ void setup() {
 }
 
 void measure() {
-  //Serial.println("callback");
   if (!airSensor.dataAvailable()) {
     return;
   }
@@ -94,17 +93,17 @@ void measure() {
   disp = "hygrometry: " + String(taux_hum) + " %";
   ssd1306_printFixed (0,  54, disp.c_str(), STYLE_NORMAL);
 
-  if (taux_co2 < 600){
+  if (taux_co2 < 600) {
     red = 0;
-  } else if (taux_co2 > 800){
+  } else if (taux_co2 > 800) {
     red = 255;
   } else {
     red = int(255*(taux_co2-600)/200);
   }
 
-  if (taux_co2 < 800){
+  if (taux_co2 < 800) {
     green = 255;
-  } else if (taux_co2 > 1000){
+  } else if (taux_co2 > 1000) {
     green = 0;
   } else {
     green = int(255*(1000-taux_co2)/200);
