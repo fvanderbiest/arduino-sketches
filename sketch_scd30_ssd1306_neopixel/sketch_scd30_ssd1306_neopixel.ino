@@ -44,16 +44,21 @@ void setup() {
   Wire.setClock(50000); // 50kHz, recommended for SCD30
 
   if (airSensor.begin() == false) {
+    // should not happen !
     Serial.println("CO2 sensor not detected !");
     while (1);
   }
 
-  airSensor.setAltitudeCompensation(300); //Set altitude of the sensor in m
-  airSensor.setAmbientPressure(1020); //Current ambient pressure in mBar: 700 to 1200
+  // Set altitude of the sensor in m
+  // TODO: let the user provide it !
+  airSensor.setAltitudeCompensation(300);
 
-  //float offset = airSensor.getTemperatureOffset();
-  //Serial.print("Current temp offset: ");
-  //Serial.print(offset, 2);
+  // Current ambient pressure in mBar: 700 to 1200
+  // TODO: measure it !
+  airSensor.setAmbientPressure(1020);
+
+  // Set temperature offset to compensate for self-heating
+  airSensor.setTemperatureOffset(3.2);
 
   runner.init();
   runner.addTask(mainTask);
