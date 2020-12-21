@@ -97,12 +97,12 @@ void measure() {
     red = int(255*(taux_co2-600)/200);
   }
 
-  if (taux_co2 < 600){
+  if (taux_co2 < 800){
     green = 255;
   } else if (taux_co2 > 1000){
     green = 0;
   } else {
-    green = int(255*(1000-taux_co2)/400);
+    green = int(255*(1000-taux_co2)/200);
   }
 
   if (taux_co2 < 1000) {
