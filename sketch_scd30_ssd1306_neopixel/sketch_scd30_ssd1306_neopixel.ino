@@ -5,9 +5,9 @@
 #include "Adafruit_NeoPixel.h"
 #include "TaskScheduler.h"
 
-#define BRIGHTNESS          20 //1-255
+#define BRIGHTNESS          100 //1-255
 #define NUMPIXELS           7
-#define MAX_LIGHT_AT_PPM    2000
+#define MAX_BRIGHTNESS_AT_PPM    2000
 
 int PIN_WS2812 = 2;
 String disp;
@@ -18,8 +18,8 @@ int blue = 0;
 int brightness;
 float temp;
 char formattedTemp[4];
-void main();
-Task t2(1000, TASK_FOREVER, &main);
+void measure();
+Task mainTask(1000, TASK_FOREVER, &measure);
 SCD30 airSensor;
 Adafruit_NeoPixel neopixel = Adafruit_NeoPixel(NUMPIXELS, PIN_WS2812, NEO_GRB + NEO_KHZ800);
 Scheduler runner;
@@ -46,19 +46,18 @@ void setup()
   }
 
   airSensor.setAltitudeCompensation(300); //Set altitude of the sensor in m
-  airSensor.setAmbientPressure(935); //Current ambient pressure in mBar: 700 to 1200
+  airSensor.setAmbientPressure(1020); //Current ambient pressure in mBar: 700 to 1200
 
   //float offset = airSensor.getTemperatureOffset();
   //Serial.print("Current temp offset: ");
   //Serial.print(offset, 2);
 
   runner.init();
-  //Serial.println("Initialized scheduler");
-  runner.addTask(t2);
-  t2.enable();
+  runner.addTask(mainTask);
+  mainTask.enable();
 }
 
-void main() {
+void measure() {
   //Serial.println("callback");
   if (!airSensor.dataAvailable()) {
     return;
@@ -97,14 +96,14 @@ void main() {
 
   if (taux_co2 < 1000) {
     brightness = BRIGHTNESS;
-  } else if (taux_co2 > MAX_LIGHT_AT_PPM) {
+  } else if (taux_co2 > MAX_BRIGHTNESS_AT_PPM) {
     brightness = 255;
   } else {
-    brightness = BRIGHTNESS + int((255-BRIGHTNESS)*(taux_co2-1000)/(MAX_LIGHT_AT_PPM-1000));
+    brightness = BRIGHTNESS + int((255-BRIGHTNESS)*(taux_co2-1000)/(MAX_BRIGHTNESS_AT_PPM-1000));
   }
 
   neopixel.setBrightness(brightness);
-  neopixel.fill(neopixel.Color(red,green,blue), 0, NUMPIXELS);
+  neopixel.fill(neopixel.Color(red, green, blue), 0, NUMPIXELS);
   neopixel.show();
 }
 
