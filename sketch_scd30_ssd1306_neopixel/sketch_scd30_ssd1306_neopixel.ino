@@ -5,11 +5,11 @@
 #include "Adafruit_NeoPixel.h"
 #include "TaskScheduler.h"
 
-#define BRIGHTNESS          100 //1-255
-#define NUMPIXELS           7
-#define MAX_BRIGHTNESS_AT_PPM    2000
+#define BRIGHTNESS             100 //1-255
+#define NUMPIXELS              7
+#define MAX_BRIGHTNESS_AT_PPM  2000
+#define PIN_WS2812             2
 
-int PIN_WS2812 = 2;
 String disp;
 boolean started = false;
 int taux_co2;
