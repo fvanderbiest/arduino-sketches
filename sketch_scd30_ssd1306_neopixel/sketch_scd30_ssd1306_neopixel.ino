@@ -114,7 +114,7 @@ void measure();
 void persistSettings();
 Task mainTask(1000, TASK_FOREVER, &measure);
 Task settingsToEEPROM(SETTINGS_TO_EEPROM_FREQUENCY_MS, TASK_FOREVER, &persistSettings);
-SCD30 airSensor;
+SCD30 scd30;
 Adafruit_NeoPixel neopixel = Adafruit_NeoPixel(NUMPIXELS, PIN_WS2812, NEO_GRB + NEO_KHZ800);
 Scheduler runner;
 Button ledButton = Button();
@@ -187,7 +187,7 @@ void setup() {
   Wire.begin();
   Wire.setClock(50000); // 50kHz, recommended for SCD30
 
-  if (airSensor.begin() == false) {
+  if (scd30.begin() == false) {
     // should not happen !
     Serial.println("CO2 sensor not detected !");
     while (1);
@@ -195,20 +195,20 @@ void setup() {
 
   // Set altitude of the sensor in m
   //Serial.print("Sensor altitude was previously set to ");
-  //Serial.println(airSensor.getAltitudeCompensation());
-  if (airSensor.getAltitudeCompensation() != settings.elevation) {
+  //Serial.println(scd30.getAltitudeCompensation());
+  if (scd30.getAltitudeCompensation() != settings.elevation) {
     //Serial.print("Setting it to ");
     //Serial.println(settings.elevation);
-    airSensor.setAltitudeCompensation(settings.elevation);
+    scd30.setAltitudeCompensation(settings.elevation);
   }
 
   // Current ambient pressure in mBar: 700 to 1200
   // TODO: measure it !
-  airSensor.setAmbientPressure(1000);
+  scd30.setAmbientPressure(1000);
 
   // Set temperature offset to compensate for self-heating
-  if (airSensor.getTemperatureOffset() == 0) {
-    airSensor.setTemperatureOffset(3.2);
+  if (scd30.getTemperatureOffset() == 0) {
+    scd30.setTemperatureOffset(3.2);
   }
 
   runner.init();
@@ -241,17 +241,19 @@ void refreshLedModeSprite() {
 void persistSettings() {
   if (settingsChanged) {
     flash_settings.write(settings);
-    airSensor.setAltitudeCompensation(settings.elevation);
+    if (scd30.getAltitudeCompensation() != settings.elevation) {
+      scd30.setAltitudeCompensation(settings.elevation);
+    }
     settingsChanged = false;
   }
 }
 
 void measure() {
-  if (!airSensor.dataAvailable()) {
+  if (!scd30.dataAvailable()) {
     return;
   }
 
-  taux_co2 = airSensor.getCO2();
+  taux_co2 = scd30.getCO2();
   if (taux_co2 < 400) {
     // happens sometimes at startup
     return;
@@ -260,9 +262,9 @@ void measure() {
     ssd1306_fillScreen(0x00);
     screenRequiresRefresh = false;
   }
-  temp = airSensor.getTemperature();
+  temp = scd30.getTemperature();
   dtostrf(temp, 4, 1, formattedTemp);
-  int taux_hum = airSensor.getHumidity();
+  int taux_hum = scd30.getHumidity();
 
   if (settings.screenMode > 0) {
     refreshLedModeSprite();
@@ -386,14 +388,18 @@ void loop() {
   }
 
   if (plusButton.pressed()) {
-    settings.elevation += ELEVATION_STEP_M;
-    settingsChanged = true;
+    if (settings.elevation <= 8800) {
+      settings.elevation += ELEVATION_STEP_M;
+      settingsChanged = true;
+    }
     displayElevation();
   }
 
   if (minusButton.pressed()) {
-    settings.elevation -= ELEVATION_STEP_M;
-    settingsChanged = true;
+    if (settings.elevation >= ELEVATION_STEP_M) {
+      settings.elevation -= ELEVATION_STEP_M;
+      settingsChanged = true;
+    }
     displayElevation();
   }
   
