@@ -7,14 +7,17 @@
 #include "Bounce2.h"
 #include "FlashStorage.h"
 
-#define NUMPIXELS                         7
+// User-level settings:
 #define MAX_BRIGHTNESS_AT_PPM             2000
+#define SETTINGS_TO_EEPROM_FREQUENCY_MS   10000
+
+// Hardware-related, do not change:
+#define NUMPIXELS                         7
 #define PIN_WS2812                        2
 #define PIN_BTN_SCREEN_MODE               7
 #define PIN_BTN_LED_MODE                  10
 #define PIN_BTN_ELEVATION_PLUS            8
 #define PIN_BTN_ELEVATION_MINUS           9
-#define SETTINGS_TO_EEPROM_FREQUENCY_MS   10000
 
 /*
  * Heart image below is defined directly in flash memory.
