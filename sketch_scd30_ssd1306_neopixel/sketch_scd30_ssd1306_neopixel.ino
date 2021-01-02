@@ -38,7 +38,7 @@ int BRIGHTNESS = 100; //1-255
 int ELEVATION = 300;
 int PRESSURE = 1000;
 String disp;
-boolean started = false;
+boolean screenRequiresRefresh = true;
 int taux_co2;
 int red;
 int green;
@@ -148,12 +148,12 @@ void measure() {
 
   taux_co2 = airSensor.getCO2();
   if (taux_co2 < 400) {
-    // happens at startup
+    // happens sometimes at startup
     return;
   }
-  if (started == false) {
+  if (screenRequiresRefresh == true) {
     ssd1306_fillScreen(0x00);
-    started = true;
+    screenRequiresRefresh = false;
   }
   temp = airSensor.getTemperature();
   dtostrf(temp, 4, 1, formattedTemp);
@@ -238,7 +238,7 @@ void loop() {
       ssd1306_printFixed (0,  8, "Display ON", STYLE_BOLD);
       ssd1306_setFixedFont(ssd1306xled_font6x8);
       ssd1306_printFixed (0, 39, "Initializing...", STYLE_NORMAL);
-      started = false; // indicates screen needs refreshing (TODO: rename var)
+      screenRequiresRefresh = true;
     }
     flash_settings.write(settings); // TODO: check if write is required every minute, and perform it (soft debounce to prevent wear)
   }
