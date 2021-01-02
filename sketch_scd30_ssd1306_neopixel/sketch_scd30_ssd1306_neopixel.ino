@@ -7,13 +7,14 @@
 #include "Bounce2.h"
 #include "FlashStorage.h"
 
-#define NUMPIXELS              7
-#define MAX_BRIGHTNESS_AT_PPM  2000
-#define PIN_WS2812             2
-#define PIN_BTN_SCREEN_MODE           7
-#define PIN_BTN_LED_MODE              10
-#define PIN_BTN_ELEVATION_PLUS           8
-#define PIN_BTN_ELEVATION_MINUS          9
+#define NUMPIXELS                         7
+#define MAX_BRIGHTNESS_AT_PPM             2000
+#define PIN_WS2812                        2
+#define PIN_BTN_SCREEN_MODE               7
+#define PIN_BTN_LED_MODE                  10
+#define PIN_BTN_ELEVATION_PLUS            8
+#define PIN_BTN_ELEVATION_MINUS           9
+#define SETTINGS_TO_EEPROM_FREQUENCY_MS   10000
 
 /*
  * Heart image below is defined directly in flash memory.
@@ -88,6 +89,7 @@ typedef struct {
 SETTINGS settings;
 FlashStorage(flash_settings, SETTINGS);
 
+boolean settingsChanged = false;
 int BRIGHTNESS = 100; //1-255
 int ELEVATION = 300;
 int PRESSURE = 1000;
@@ -101,7 +103,9 @@ int brightness;
 float temp;
 char formattedTemp[4];
 void measure();
+void persistSettings();
 Task mainTask(1000, TASK_FOREVER, &measure);
+Task settingsToEEPROM(SETTINGS_TO_EEPROM_FREQUENCY_MS, TASK_FOREVER, &persistSettings);
 SCD30 airSensor;
 Adafruit_NeoPixel neopixel = Adafruit_NeoPixel(NUMPIXELS, PIN_WS2812, NEO_GRB + NEO_KHZ800);
 Scheduler runner;
@@ -190,8 +194,12 @@ void setup() {
   airSensor.setTemperatureOffset(3.2);
 
   runner.init();
+
   runner.addTask(mainTask);
   mainTask.enable();
+
+  runner.addTask(settingsToEEPROM);
+  settingsToEEPROM.enable();
 }
 
 void refreshLedModeSprite() {
@@ -208,8 +216,18 @@ void refreshLedModeSprite() {
   }
 }
 
-void measure() {
+/*
+ * Prevent EEPROM wear by buffering write operations
+ */
+void persistSettings() {
+  if (settingsChanged) {
+    flash_settings.write(settings);
+    settingsChanged = false;
+  }
+}
 
+
+void measure() {
   if (!airSensor.dataAvailable()) {
     return;
   }
@@ -296,6 +314,7 @@ void loop() {
     settings.ledMode += 1;
     // this btn allows to change the LED behavior: off / on-thresholds / on-continuous
     settings.ledMode = settings.ledMode % 3;
+    settingsChanged = true; // indicates that settings should be saved to EEPROM on next scheduled task run.
 
     ssd1306_fillScreen(0x00);
     ssd1306_setFixedFont(ssd1306xled_font8x16);
@@ -315,13 +334,14 @@ void loop() {
     refreshLedModeSprite();
     delay(1000);
     screenRequiresRefresh = true;
-    flash_settings.write(settings);
   }
 
   if (screenButton.pressed()) {
     // this btn allows to change the screen display: off / on-ppm
     settings.screenMode += 1;
     settings.screenMode = settings.screenMode % 2;
+    settingsChanged = true; // indicates that settings should be saved to EEPROM on next scheduled task run.
+
     if (settings.screenMode == 0) {
       ssd1306_fillScreen(0x00);
     } else {
@@ -331,7 +351,6 @@ void loop() {
       ssd1306_printFixed (0, 39, "Initializing...", STYLE_NORMAL);
       screenRequiresRefresh = true;
     }
-    flash_settings.write(settings); // TODO: check if write is required every minute, and perform it (soft debounce to prevent wear)
   }
 
   if (plusButton.pressed()) {
