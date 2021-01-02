@@ -296,12 +296,26 @@ void loop() {
     settings.ledMode += 1;
     // this btn allows to change the LED behavior: off / on-thresholds / on-continuous
     settings.ledMode = settings.ledMode % 3;
+
+    ssd1306_fillScreen(0x00);
+    ssd1306_setFixedFont(ssd1306xled_font8x16);
     if (settings.ledMode == 0) {
       neopixel.clear();
       neopixel.show();
+      ssd1306_printFixed (0,  8, "LED OFF", STYLE_BOLD);
+    } else {
+      ssd1306_printFixed (0,  8, "LED ON", STYLE_BOLD);
+      ssd1306_setFixedFont(ssd1306xled_font6x8);
     }
-    flash_settings.write(settings);
+    if (settings.ledMode == 1) {
+      ssd1306_printFixed (0, 39, "Threshold mode", STYLE_NORMAL);
+    } else if (settings.ledMode == 2) {
+      ssd1306_printFixed (0, 39, "Continuum mode", STYLE_NORMAL);
+    }
     refreshLedModeSprite();
+    delay(1000);
+    screenRequiresRefresh = true;
+    flash_settings.write(settings);
   }
 
   if (screenButton.pressed()) {
