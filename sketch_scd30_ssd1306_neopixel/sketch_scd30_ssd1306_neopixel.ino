@@ -4,13 +4,35 @@
 #include "ssd1306.h"
 #include "Adafruit_NeoPixel.h"
 #include "TaskScheduler.h"
+#include "Bounce2.h"
+#include "FlashStorage.h"
 
 #define NUMPIXELS              7
 #define MAX_BRIGHTNESS_AT_PPM  2000
 #define PIN_WS2812             2
-#define PIN_BTN_MODE           7
-#define PIN_BTN_PLUS           8
-#define PIN_BTN_MINUS          9
+#define PIN_BTN_SCREEN_MODE           7
+#define PIN_BTN_LED_MODE              10
+#define PIN_BTN_ELEVATION_PLUS           8
+#define PIN_BTN_ELEVATION_MINUS          9
+
+typedef struct {
+  boolean valid;
+  /*
+   * 0 screen off
+   * 1 screen on
+   */
+  unsigned int screenMode;
+  
+  /*
+   * 0 led off
+   * 1 led on, hard tresholds
+   * 2 led on, continuous color
+   */
+  unsigned int ledMode;
+  //unsigned int elevation; // TODO
+} SETTINGS;
+SETTINGS settings;
+FlashStorage(flash_settings, SETTINGS);
 
 int BRIGHTNESS = 100; //1-255
 int ELEVATION = 300;
@@ -25,86 +47,16 @@ int brightness;
 float temp;
 char formattedTemp[4];
 void measure();
-int modeButtonState = 0;
-int plusButtonState = 0;
-int minusButtonState = 0;
 Task mainTask(1000, TASK_FOREVER, &measure);
 SCD30 airSensor;
 Adafruit_NeoPixel neopixel = Adafruit_NeoPixel(NUMPIXELS, PIN_WS2812, NEO_GRB + NEO_KHZ800);
 Scheduler runner;
+Button ledButton = Button();
+Button screenButton = Button();
+Button plusButton = Button();
+Button minusButton = Button();
 
-// A callback contains both a function and a pointer to arbitrary data
-// that will be passed as argument to the function.
-// see https://arduino.stackexchange.com/questions/23063/user-callback-functions
-struct Callback {
-    Callback(void (*f)(void *) = 0, void *d = 0)
-        : function(f), data(d) {}
-    void (*function)(void *);
-    void *data;
-};
-
-
-void update_elevation(void *data)
-{
-  int elevation = * (int *) data;
-  //ELEVATION = elevation;
-  airSensor.setAltitudeCompensation(elevation);
-  Serial.println("elevation updated");
-}
-
-void update_pressure(void *data)
-{
-  int pressure = * (int *) data;
-  airSensor.setAmbientPressure(pressure);
-  Serial.println("pressure updated");
-}
-
-void update_brightness(void *data)
-{
-  int brightness = * (int *) data;
-  BRIGHTNESS = brightness;
-  Serial.println("brightness updated");
-}
-
-
-class SetupScreen {
-  private:
-    String caption;
-    unsigned int value;
-    unsigned int minValue;
-    unsigned int maxValue;
-    unsigned int increment;
-    void (*myCallback)();
-
-  public:
-    SetupScreen(String caption, unsigned int value, unsigned int minValue, unsigned int maxValue, void (*callback)(), unsigned int increment = 1) {
-
-      this->caption = caption;
-      this->value = value;
-      this->minValue = minValue;
-      this->maxValue = maxValue;
-      this->increment = increment;
-      this->myCallback = callback;
-    }
-
-    void plus() {
-      if (value <= maxValue - increment) {
-        value += increment;
-        myCallback.function(value);
-        display();
-        //callbacks[i].function(callbacks[i].data);
-      }
-    }
-
-    void minus() {
-      if (value >= minValue + increment) {
-        value -= increment;
-        myCallback.function(value);
-        display();
-        //myCallback(value);
-      }
-    }
-
+/*
     void display() {
       ssd1306_fillScreen(0x00);
       ssd1306_setFixedFont(ssd1306xled_font8x16);
@@ -112,64 +64,57 @@ class SetupScreen {
       ssd1306_setFixedFont(ssd1306xled_font6x8);
       ssd1306_printFixed (0, 39, String(value).c_str(), STYLE_NORMAL);
     }
-};
+   
 
-
-class ModeSwitcher {
-  private:
-    unsigned int setupScreenNumber = 0;
-    SetupScreen setupScreen1 = SetupScreen("Altitude", 300, 0, 8800, Callback(update_elevation, &ELEVATION), 10);
-    SetupScreen setupScreen2 = SetupScreen("Pression", 1000, 700, 1200, Callback(update_pressure, &PRESSURE), 10);
-    SetupScreen setupScreen3 = SetupScreen("Luminosite", 50, 0, 100, Callback(update_brightness, &BRIGHTNESS), 1);
-    SetupScreen screensArray[3] = {setupScreen1, setupScreen2, setupScreen3}; 
-    
-  public:
-    ModeSwitcher() {
-      /*
-      SetupScreen setupScreen1 = SetupScreen("Altitude", 300, 0, 8800, 10);
-      SetupScreen setupScreen2 = SetupScreen("Pression", 1000, 700, 1200, 10);
-      SetupScreen setupScreen3 = SetupScreen("Luminosite", 50, 0, 100);
-      this->screensArray = {setupScreen1, setupScreen2, setupScreen3};
-      */
-      pinMode(PIN_BTN_MODE, INPUT); // this btn allows to circle through setup screens
-      pinMode(PIN_BTN_PLUS, INPUT); // this btn increments the value of the screen currently displayed
-      pinMode(PIN_BTN_MINUS, INPUT); // this btn decrements the value of the screen currently displayed
-    }
-
-    void next() {
-      setupScreenNumber += 1;
-      screensArray[setupScreenNumber].display();
-    }
-
-    void plus() {
-      screensArray[setupScreenNumber].plus();
-    }
-
-    void minus() {
-      screensArray[setupScreenNumber].minus();
-    }
-};
-
-
-ModeSwitcher switcher;
+*/
 
 void setup() {
   Serial.begin(115200);
 
-  //SetupScreen setupScreen1 = SetupScreen("Altitude", 300, 0, 8800, 10);
-  //ModeSwitcher switcher;
+  settings = flash_settings.read();
+  if (settings.valid == false) {
+    settings.ledMode = 2; // initialize with continuous mode
+    settings.screenMode = 1; // initialize screen on
+    settings.valid = true;
+    flash_settings.write(settings);
+  }
+
+  // this btn allows to change the LED behavior: off / on-continuous / on-thresholds
+  ledButton.attach(PIN_BTN_LED_MODE, INPUT_PULLUP);
+  ledButton.interval(10);
+  // HIGH state corresponds to physically pressing the button:
+  ledButton.setPressedState(HIGH);
+  
+  // this btn allows to change the screen display: off / on-ppm / on-everything
+  screenButton.attach(PIN_BTN_SCREEN_MODE, INPUT_PULLUP);
+  screenButton.interval(10);
+  screenButton.setPressedState(HIGH);
+  
+  // this btn increments current elevation
+  plusButton.attach(PIN_BTN_ELEVATION_PLUS, INPUT_PULLUP);
+  plusButton.interval(10);
+  plusButton.setPressedState(HIGH);
+  
+  // this btn decrements current elevation
+  minusButton.attach(PIN_BTN_ELEVATION_MINUS, INPUT_PULLUP);
+  minusButton.interval(10);
+  minusButton.setPressedState(HIGH);
 
   neopixel.begin(); // INITIALIZE NeoPixel object (REQUIRED)
   neopixel.setBrightness(BRIGHTNESS);
   neopixel.fill(neopixel.Color(0,255,0), 0, NUMPIXELS);
-  neopixel.show();
+  if (settings.ledMode > 0) {
+    neopixel.show();
+  }
   
   ssd1306_128x64_i2c_init();
   ssd1306_fillScreen(0x00);
-  ssd1306_setFixedFont(ssd1306xled_font8x16);
-  ssd1306_printFixed (0,  8, "Real time CO2", STYLE_BOLD);
-  ssd1306_setFixedFont(ssd1306xled_font6x8);
-  ssd1306_printFixed (0, 39, "Initializing...", STYLE_NORMAL);
+  if (settings.screenMode > 0) {
+    ssd1306_setFixedFont(ssd1306xled_font8x16);
+    ssd1306_printFixed (0,  8, "Real time CO2", STYLE_BOLD);
+    ssd1306_setFixedFont(ssd1306xled_font6x8);
+    ssd1306_printFixed (0, 39, "Initializing...", STYLE_NORMAL);
+  }
 
   Wire.begin();
   Wire.setClock(50000); // 50kHz, recommended for SCD30
@@ -182,11 +127,11 @@ void setup() {
 
   // Set altitude of the sensor in m
   // TODO: let the user provide it !
-  airSensor.setAltitudeCompensation(300);
+  airSensor.setAltitudeCompensation(ELEVATION);
 
   // Current ambient pressure in mBar: 700 to 1200
   // TODO: measure it !
-  airSensor.setAmbientPressure(1020);
+  airSensor.setAmbientPressure(1000);
 
   // Set temperature offset to compensate for self-heating
   airSensor.setTemperatureOffset(3.2);
@@ -214,16 +159,22 @@ void measure() {
   dtostrf(temp, 4, 1, formattedTemp);
   int taux_hum = airSensor.getHumidity();
 
-  ssd1306_setFixedFont(ssd1306xled_font8x16);
-  disp = String(taux_co2) + " ppm";    
-  ssd1306_printFixed (0,  8, disp.c_str(), STYLE_BOLD);
-  ssd1306_setFixedFont(ssd1306xled_font6x8);
-  disp = "temperature: " + String(formattedTemp) + " C";
-  ssd1306_printFixed (0,  39, disp.c_str(), STYLE_NORMAL);
+  if (settings.screenMode > 0) {
+    ssd1306_setFixedFont(ssd1306xled_font8x16);
+    disp = String(taux_co2) + " ppm";
+    ssd1306_printFixed (0,  8, disp.c_str(), STYLE_BOLD);
+    ssd1306_setFixedFont(ssd1306xled_font6x8);
+    disp = "temperature: " + String(formattedTemp) + " C";
+    ssd1306_printFixed (0,  39, disp.c_str(), STYLE_NORMAL);
+    
+    disp = "hygrometry: " + String(taux_hum) + " %";
+    ssd1306_printFixed (0,  54, disp.c_str(), STYLE_NORMAL);
+  }
 
-  disp = "hygrometry: " + String(taux_hum) + " %";
-  ssd1306_printFixed (0,  54, disp.c_str(), STYLE_NORMAL);
-
+  if (settings.ledMode == 0) {
+    return;
+  }
+  
   if (taux_co2 < 600) {
     red = 0;
   } else if (taux_co2 > 800) {
@@ -256,21 +207,50 @@ void measure() {
 void loop() {
   runner.execute();
 
-  modeButtonState = digitalRead(PIN_BTN_MODE);
-  plusButtonState = digitalRead(PIN_BTN_PLUS);
-  minusButtonState = digitalRead(PIN_BTN_MINUS);
+  ledButton.update();
+  screenButton.update();
+  plusButton.update();
+  minusButton.update();
 
-  if (modeButtonState) {
-    switcher.next();
-    delay(500);
+  if (ledButton.pressed()) {
+    settings.ledMode += 1;
+    // this btn allows to change the LED behavior: off / on-thresholds / on-continuous
+    settings.ledMode = settings.ledMode % 3;
+    //Serial.print(F("LED Mode is "));
+    //Serial.println(settings.ledMode);
+    if (settings.ledMode == 0) {
+      neopixel.clear();
+      neopixel.show();
+    }
+    flash_settings.write(settings);
   }
-  if (plusButtonState) {
-    switcher.plus();
-    delay(500);
+
+  if (screenButton.pressed()) {
+    // this btn allows to change the screen display: off / on-ppm
+    settings.screenMode += 1;
+    settings.screenMode = settings.screenMode % 2;
+    //Serial.print(F("Screen Mode is "));
+    //Serial.println(settings.screenMode);
+    if (settings.screenMode == 0) {
+      ssd1306_fillScreen(0x00);
+    } else {
+      ssd1306_setFixedFont(ssd1306xled_font8x16);
+      ssd1306_printFixed (0,  8, "Display ON", STYLE_BOLD);
+      ssd1306_setFixedFont(ssd1306xled_font6x8);
+      ssd1306_printFixed (0, 39, "Initializing...", STYLE_NORMAL);
+      started = false; // indicates screen needs refreshing (TODO: rename var)
+    }
+    flash_settings.write(settings); // TODO: check if write is required every minute, and perform it (soft debounce to prevent wear)
   }
-  if (minusButtonState) {
-    switcher.minus();
-    delay(500);
+
+  if (plusButton.pressed()) {
+    // TODO
+  }
+
+  if (minusButton.pressed()) {
+    // TODO
+    //elevation -= 10;
+    //airSensor.setAltitudeCompensation(elevation);
   }
   
 }
