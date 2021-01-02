@@ -10,13 +10,15 @@
 // User-level settings:
 #define MAX_BRIGHTNESS_AT_PPM             2000
 #define SETTINGS_TO_EEPROM_FREQUENCY_MS   10000
+#define DEFAULT_ELEVATION_M               300
+#define ELEVATION_STEP_M                  50
 
 // Hardware-related, do not change:
 #define NUMPIXELS                         7
 #define PIN_WS2812                        2
 #define PIN_BTN_SCREEN_MODE               7
-#define PIN_BTN_LED_MODE                  10
-#define PIN_BTN_ELEVATION_PLUS            8
+#define PIN_BTN_LED_MODE                  8
+#define PIN_BTN_ELEVATION_PLUS            10
 #define PIN_BTN_ELEVATION_MINUS           9
 
 /*
@@ -87,14 +89,17 @@ typedef struct {
    * 2 led on, continuous color
    */
   unsigned int ledMode;
-  //unsigned int elevation; // TODO
+
+  /*
+   * Elevation stores sensor elevation
+   */
+  unsigned int elevation;
 } SETTINGS;
 SETTINGS settings;
 FlashStorage(flash_settings, SETTINGS);
 
 boolean settingsChanged = false;
-int BRIGHTNESS = 100; //1-255
-int ELEVATION = 300;
+int BRIGHTNESS = 20; //1-255
 int PRESSURE = 1000;
 String disp;
 boolean screenRequiresRefresh = true;
@@ -127,6 +132,7 @@ void setup() {
   if (settings.valid == false) {
     settings.ledMode = 2; // initialize with continuous mode
     settings.screenMode = 1; // initialize screen on
+    settings.elevation = DEFAULT_ELEVATION_M;
     settings.valid = true;
     flash_settings.write(settings);
   }
@@ -164,8 +170,10 @@ void setup() {
   if (settings.screenMode > 0) {
     ssd1306_setFixedFont(ssd1306xled_font8x16);
     ssd1306_printFixed (0,  8, "Real time CO2", STYLE_BOLD);
+    disp = "Elevation: " + String(settings.elevation) + " m";
     ssd1306_setFixedFont(ssd1306xled_font6x8);
-    ssd1306_printFixed (0, 39, "Initializing...", STYLE_NORMAL);
+    ssd1306_printFixed (0, 39, disp.c_str(), STYLE_NORMAL);
+    ssd1306_printFixed (0, 54, "Initializing...", STYLE_NORMAL);
   }
 
   SPRITE sprite;
@@ -186,15 +194,22 @@ void setup() {
   }
 
   // Set altitude of the sensor in m
-  // TODO: let the user provide it !
-  airSensor.setAltitudeCompensation(ELEVATION);
+  //Serial.print("Sensor altitude was previously set to ");
+  //Serial.println(airSensor.getAltitudeCompensation());
+  if (airSensor.getAltitudeCompensation() != settings.elevation) {
+    //Serial.print("Setting it to ");
+    //Serial.println(settings.elevation);
+    airSensor.setAltitudeCompensation(settings.elevation);
+  }
 
   // Current ambient pressure in mBar: 700 to 1200
   // TODO: measure it !
   airSensor.setAmbientPressure(1000);
 
   // Set temperature offset to compensate for self-heating
-  airSensor.setTemperatureOffset(3.2);
+  if (airSensor.getTemperatureOffset() == 0) {
+    airSensor.setTemperatureOffset(3.2);
+  }
 
   runner.init();
 
@@ -203,6 +218,7 @@ void setup() {
 
   runner.addTask(settingsToEEPROM);
   settingsToEEPROM.enable();
+
 }
 
 void refreshLedModeSprite() {
@@ -225,10 +241,10 @@ void refreshLedModeSprite() {
 void persistSettings() {
   if (settingsChanged) {
     flash_settings.write(settings);
+    airSensor.setAltitudeCompensation(settings.elevation);
     settingsChanged = false;
   }
 }
-
 
 void measure() {
   if (!airSensor.dataAvailable()) {
@@ -247,7 +263,6 @@ void measure() {
   temp = airSensor.getTemperature();
   dtostrf(temp, 4, 1, formattedTemp);
   int taux_hum = airSensor.getHumidity();
-
 
   if (settings.screenMode > 0) {
     refreshLedModeSprite();
@@ -276,7 +291,7 @@ void measure() {
       red = int(255*(taux_co2-600)/200);
     } else {
       // threshold mode
-      red = 0;
+      red = 127;
     }
   }
 
@@ -286,9 +301,11 @@ void measure() {
     green = 0;
   } else {
     if (settings.ledMode == 2) {
+      // continuum mode
       green = int(255*(1000-taux_co2)/200);
     } else {
-      green = 255;
+      // threshold mode
+      green = 127;
     }
   }
 
@@ -297,12 +314,24 @@ void measure() {
   } else if (taux_co2 > MAX_BRIGHTNESS_AT_PPM) {
     brightness = 255;
   } else {
+    // increase brightness above 1000 ppm to catch user's eye
     brightness = BRIGHTNESS + int((255-BRIGHTNESS)*(taux_co2-1000)/(MAX_BRIGHTNESS_AT_PPM-1000));
   }
 
   neopixel.setBrightness(brightness);
   neopixel.fill(neopixel.Color(red, green, blue), 0, NUMPIXELS);
   neopixel.show();
+}
+
+void displayElevation() {
+  ssd1306_fillScreen(0x00);
+  ssd1306_setFixedFont(ssd1306xled_font8x16);
+  ssd1306_printFixed (0,  8, "Elevation", STYLE_BOLD);
+  ssd1306_setFixedFont(ssd1306xled_font6x8);
+  disp = String(settings.elevation) + " meters";
+  ssd1306_printFixed (0, 39, disp.c_str(), STYLE_NORMAL);
+  ssd1306_printFixed (0,  54, "Reboot required", STYLE_NORMAL);
+  screenRequiresRefresh = true;
 }
 
 void loop() {
@@ -314,8 +343,8 @@ void loop() {
   minusButton.update();
 
   if (ledButton.pressed()) {
-    settings.ledMode += 1;
     // this btn allows to change the LED behavior: off / on-thresholds / on-continuous
+    settings.ledMode += 1;
     settings.ledMode = settings.ledMode % 3;
     settingsChanged = true; // indicates that settings should be saved to EEPROM on next scheduled task run.
 
@@ -357,13 +386,15 @@ void loop() {
   }
 
   if (plusButton.pressed()) {
-    // TODO
+    settings.elevation += ELEVATION_STEP_M;
+    settingsChanged = true;
+    displayElevation();
   }
 
   if (minusButton.pressed()) {
-    // TODO
-    //elevation -= 10;
-    //airSensor.setAltitudeCompensation(elevation);
+    settings.elevation -= ELEVATION_STEP_M;
+    settingsChanged = true;
+    displayElevation();
   }
   
 }
