@@ -15,6 +15,60 @@
 #define PIN_BTN_ELEVATION_PLUS           8
 #define PIN_BTN_ELEVATION_MINUS          9
 
+/*
+ * Heart image below is defined directly in flash memory.
+ * This reduces SRAM consumption.
+ * The image is defined from bottom to top (bits), from left to
+ * right (bytes).
+ */
+const PROGMEM uint8_t heartImage[8] =
+{
+    0B00001110,
+    0B00011111,
+    0B00111111,
+    0B01111110,
+    0B01111110,
+    0B00111101,
+    0B00011001,
+    0B00001110
+};
+
+const PROGMEM uint8_t thresholdImage[8] =
+{
+  B11111000,
+  B11111000,
+  B00011000,
+  B00011000,
+  B00011000,
+  B00011000,
+  B00011111,
+  B00011111
+};
+
+const PROGMEM uint8_t continuumImage[8] =
+{
+  0B11000000,
+  0B11100000,
+  0B01110000,
+  0B00111000,
+  0B00011100,
+  0B00001110,
+  0B00000111,
+  0B00000011
+};
+
+const PROGMEM uint8_t resetImage[8] =
+{
+  0B00000000,
+  0B00000000,
+  0B00000000,
+  0B00000000,
+  0B00000000,
+  0B00000000,
+  0B00000000,
+  0B00000000
+};
+
 typedef struct {
   boolean valid;
   /*
@@ -55,18 +109,9 @@ Button ledButton = Button();
 Button screenButton = Button();
 Button plusButton = Button();
 Button minusButton = Button();
-
-/*
-    void display() {
-      ssd1306_fillScreen(0x00);
-      ssd1306_setFixedFont(ssd1306xled_font8x16);
-      ssd1306_printFixed (0,  8, caption.c_str(), STYLE_BOLD);
-      ssd1306_setFixedFont(ssd1306xled_font6x8);
-      ssd1306_printFixed (0, 39, String(value).c_str(), STYLE_NORMAL);
-    }
-   
-
-*/
+SPRITE thresholdSprite;
+SPRITE continuumSprite;
+SPRITE resetSprite;
 
 void setup() {
   Serial.begin(115200);
@@ -100,7 +145,7 @@ void setup() {
   minusButton.interval(10);
   minusButton.setPressedState(HIGH);
 
-  neopixel.begin(); // INITIALIZE NeoPixel object (REQUIRED)
+  neopixel.begin();
   neopixel.setBrightness(BRIGHTNESS);
   neopixel.fill(neopixel.Color(0,255,0), 0, NUMPIXELS);
   if (settings.ledMode > 0) {
@@ -115,6 +160,14 @@ void setup() {
     ssd1306_setFixedFont(ssd1306xled_font6x8);
     ssd1306_printFixed (0, 39, "Initializing...", STYLE_NORMAL);
   }
+
+  SPRITE sprite;
+  sprite = ssd1306_createSprite(128-8-1, 8, 8, heartImage);
+  sprite.draw();
+
+  thresholdSprite = ssd1306_createSprite(128-8-1, 8, 8, thresholdImage);
+  continuumSprite = ssd1306_createSprite(128-8-1, 8, 8, continuumImage);
+  resetSprite = ssd1306_createSprite(128-8-1, 8, 8, resetImage);
 
   Wire.begin();
   Wire.setClock(50000); // 50kHz, recommended for SCD30
@@ -141,7 +194,22 @@ void setup() {
   mainTask.enable();
 }
 
+void refreshLedModeSprite() {
+  switch (settings.ledMode) {
+    case 1:
+      thresholdSprite.draw();
+      break;
+    case 2:
+      continuumSprite.draw();
+      break;
+    default:
+      resetSprite.draw();
+      break;
+  }
+}
+
 void measure() {
+
   if (!airSensor.dataAvailable()) {
     return;
   }
@@ -159,7 +227,9 @@ void measure() {
   dtostrf(temp, 4, 1, formattedTemp);
   int taux_hum = airSensor.getHumidity();
 
+
   if (settings.screenMode > 0) {
+    refreshLedModeSprite();
     ssd1306_setFixedFont(ssd1306xled_font8x16);
     disp = String(taux_co2) + " ppm";
     ssd1306_printFixed (0,  8, disp.c_str(), STYLE_BOLD);
@@ -180,7 +250,13 @@ void measure() {
   } else if (taux_co2 > 800) {
     red = 255;
   } else {
-    red = int(255*(taux_co2-600)/200);
+    if (settings.ledMode == 2) {
+      // continuum mode
+      red = int(255*(taux_co2-600)/200);
+    } else {
+      // threshold mode
+      red = 0;
+    }
   }
 
   if (taux_co2 < 800) {
@@ -188,7 +264,11 @@ void measure() {
   } else if (taux_co2 > 1000) {
     green = 0;
   } else {
-    green = int(255*(1000-taux_co2)/200);
+    if (settings.ledMode == 2) {
+      green = int(255*(1000-taux_co2)/200);
+    } else {
+      green = 255;
+    }
   }
 
   if (taux_co2 < 1000) {
@@ -216,21 +296,18 @@ void loop() {
     settings.ledMode += 1;
     // this btn allows to change the LED behavior: off / on-thresholds / on-continuous
     settings.ledMode = settings.ledMode % 3;
-    //Serial.print(F("LED Mode is "));
-    //Serial.println(settings.ledMode);
     if (settings.ledMode == 0) {
       neopixel.clear();
       neopixel.show();
     }
     flash_settings.write(settings);
+    refreshLedModeSprite();
   }
 
   if (screenButton.pressed()) {
     // this btn allows to change the screen display: off / on-ppm
     settings.screenMode += 1;
     settings.screenMode = settings.screenMode % 2;
-    //Serial.print(F("Screen Mode is "));
-    //Serial.println(settings.screenMode);
     if (settings.screenMode == 0) {
       ssd1306_fillScreen(0x00);
     } else {
