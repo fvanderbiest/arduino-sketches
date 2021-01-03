@@ -7,7 +7,7 @@ Developed in nov/dec 2020 after reading [Reporterre's article on COVID preventio
 
 Features :
  * LED mode button switches between LED OFF / LED with color gradient / LED with hard thresholds (green < 800ppm < yellow < 1000ppm < red)
- * LED brightness increases contiuously between 1000 and 2000 ppm to catch user's eye
+ * LED brightness increases continuously between 1000 and 2000 ppm to catch user's eye
  * Screen mode button switches screen ON/OFF
  * Elevation buttons to adjust sensor position (50m steps)
  * Settings are permanent (saved to EEPROM) 
@@ -21,7 +21,7 @@ Notes:
 Parts:
  * [Sensirion SCD30](https://www.sensirion.com/en/environmental-sensors/carbon-dioxide-sensors/carbon-dioxide-sensors-co2/) sensor
  * [Seeeduino XIAO](https://wiki.seeedstudio.com/Seeeduino-XIAO/)
- * [Adafruit Neopixel Jewel](https://www.adafruit.com/product/2226)
+ * [Adafruit Neopixel Jewel](https://www.adafruit.com/product/2226) - a single WS2812 LED is a cheaper alternative (Set NUMPIXELS to 1 rather than 7)
  * four push buttons
  * one diode and a 470µF capacitor (thanks Hackaday for the [trick](https://hackaday.com/2017/01/20/cheating-at-5v-ws2812-control-to-use-a-3-3v-data-line/))
 
