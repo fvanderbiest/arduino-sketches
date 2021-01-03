@@ -292,8 +292,9 @@ void measure() {
       // continuum mode
       red = int(255*(taux_co2-600)/200);
     } else {
-      // threshold mode
-      red = 127;
+      // threshold mode, between 600 and 800
+      // we're still all green
+      red = 0;
     }
   }
 
@@ -306,7 +307,8 @@ void measure() {
       // continuum mode
       green = int(255*(1000-taux_co2)/200);
     } else {
-      // threshold mode
+      // threshold mode, between 800 and 1000
+      // we're yellow => 255 red & 127 green
       green = 127;
     }
   }
