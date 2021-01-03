@@ -1,4 +1,4 @@
-# A C02 tracker device
+# A CO2 tracker device
 
 Displays CO2 levels on an SSD1306 OLED screen, with temperature and hygrometry. 
 Visual alert (via NeoPixels) when CO2 levels exceeds thresholds, or continuous mode where the LED color goes from green to red.
