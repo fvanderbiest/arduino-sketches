@@ -19,12 +19,16 @@ Notes:
 ![CO2 tracker schematic](./CO2_tracker.png?raw=true "CO2 tracker for COVID prevention")
 
 Parts:
- * Sensirion SCD30 sensor
- * Seeeduino XIAO
- * Adafruit Neopixel jewel
+ * [Sensirion SCD30](https://www.sensirion.com/en/environmental-sensors/carbon-dioxide-sensors/carbon-dioxide-sensors-co2/) sensor
+ * [Seeeduino XIAO](https://wiki.seeedstudio.com/Seeeduino-XIAO/)
+ * [Adafruit Neopixel Jewel](https://www.adafruit.com/product/2226)
  * four push buttons
  * one diode and a 470µF capacitor (thanks Hackaday for the [trick](https://hackaday.com/2017/01/20/cheating-at-5v-ws2812-control-to-use-a-3-3v-data-line/))
- 
+
 Inspired from:
  * [Watterott's CO2 Ampel](https://github.com/watterott/CO2-Ampel/blob/master/arduino/samd/libraries/CO2-Ampel/examples/CO2-Ampel/CO2-Ampel.ino)
  * [La Fabrique's CO2 project](http://lafabrique.centralesupelec.fr/projetco2/) [French]
+
+Next steps:
+ * Adding a barometric pressure sensor like BMP280 to improve SCD30's CO2 measurement precision
+ * Code refactoring
