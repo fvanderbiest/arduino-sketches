@@ -5,6 +5,8 @@ Visual alert (via NeoPixels) when CO2 levels exceeds thresholds, or continuous m
 
 Developed in nov/dec 2020 after reading [Reporterre's article on COVID prevention](https://reporterre.net/En-Allemagne-contre-le-Covid-les-ecoles-ouvrent-les-fenetres) [FR]. 
 
+Licensed under the [MIT license](https://en.wikipedia.org/wiki/MIT_License).
+
 Features :
  * LED mode button switches between LED OFF / LED with color gradient / LED with hard thresholds (green < 800ppm < yellow < 1000ppm < red)
  * LED brightness increases continuously between 1000 and 2000 ppm to catch user's eye
