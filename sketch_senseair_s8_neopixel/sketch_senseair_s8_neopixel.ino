@@ -14,7 +14,7 @@ void blinkLed();
 Task mainTask(MEASURE_PERIOD, TASK_FOREVER, &measure);
 Task blinkTask(500, TASK_FOREVER, &blinkLed);
 Scheduler runner;
-SoftwareSerial SoftSerial_CO2(RX_PIN, TX_PIN);
+SoftwareSerial SoftSerial(RX_PIN, TX_PIN);
 Adafruit_NeoPixel neopixel = Adafruit_NeoPixel(NUMPIXELS, PIN_WS2812);
 
 int getCO2(){
@@ -22,10 +22,10 @@ int getCO2(){
     const byte CO2Command[] = {0xFE, 0X44, 0X00, 0X08, 0X02, 0X9F, 0X25};
     byte CO2Response[] = {0,0,0,0,0,0,0};
 
-    while(!(SoftSerial_CO2.available())) {
+    while(!(SoftSerial.available())) {
         retry++;
         // keep sending request until we start to get a response
-        SoftSerial_CO2.write(CO2Command, 7);
+        SoftSerial.write(CO2Command, 7);
         delay(50);
         if (retry > 10) {
             return -1;
@@ -34,24 +34,23 @@ int getCO2(){
 
     int timeout = 0; 
     
-    while (SoftSerial_CO2.available() < 7) {
+    while (SoftSerial.available() < 7) {
         timeout++; 
         if (timeout > 10) {
-            while(SoftSerial_CO2.available())  
-            SoftSerial_CO2.read();
+            while(SoftSerial.available())  
+            SoftSerial.read();
             break;                    
         }
         delay(50);
     }
 
     for (int i=0; i < 7; i++) {
-        int byte = SoftSerial_CO2.read();
+        int byte = SoftSerial.read();
         if (byte == -1) {
             return -1;
         }
         CO2Response[i] = byte;
     }  
-    int valMultiplier = 1;
     int high = CO2Response[3];
     int low = CO2Response[4];
     unsigned long val = high*256 + low;
@@ -91,10 +90,10 @@ void measure() {
     }
     neopixel.show();
   } else {
-    if (taux_co2 >= 2000) {
-      blinkTask.setInterval(100);
+    if (taux_co2 > 2000) {
+      blinkTask.setInterval(50);
     } else {
-      blinkTask.setInterval(1000-900*(taux_co2-1000)/1000);
+      blinkTask.setInterval(500-450*(taux_co2-1000)/1000);
     }
     blinkTask.enable();
   }
@@ -104,7 +103,7 @@ void setup(){
   neopixel.begin();
   neopixel.setBrightness(BRIGHTNESS);
 
-  SoftSerial_CO2.begin(9600);
+  SoftSerial.begin(9600);
   
   runner.init();
   runner.addTask(mainTask);
