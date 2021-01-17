@@ -17,45 +17,44 @@ Scheduler runner;
 SoftwareSerial SoftSerial(RX_PIN, TX_PIN);
 Adafruit_NeoPixel neopixel = Adafruit_NeoPixel(NUMPIXELS, PIN_WS2812);
 
-int getCO2(){
+int getCO2() {
+  // Inspired from https://github.com/airgradienthq/arduino
   int retry = 0;
-    const byte CO2Command[] = {0xFE, 0X44, 0X00, 0X08, 0X02, 0X9F, 0X25};
-    byte CO2Response[] = {0,0,0,0,0,0,0};
+  const byte CO2Command[] = {0xFE, 0X44, 0X00, 0X08, 0X02, 0X9F, 0X25};
+  byte CO2Response[] = {0,0,0,0,0,0,0};
 
-    while(!(SoftSerial.available())) {
-        retry++;
-        // keep sending request until we start to get a response
-        SoftSerial.write(CO2Command, 7);
-        delay(50);
-        if (retry > 10) {
-            return -1;
-        }
+  while(!(SoftSerial.available())) {
+    retry++;
+    SoftSerial.write(CO2Command, 7);
+    delay(50);
+    if (retry > 10) {
+      return -1;
     }
+  }
 
-    int timeout = 0; 
-    
-    while (SoftSerial.available() < 7) {
-        timeout++; 
-        if (timeout > 10) {
-            while(SoftSerial.available())  
-            SoftSerial.read();
-            break;                    
-        }
-        delay(50);
+  int timeout = 0;
+  while (SoftSerial.available() < 7) {
+    timeout++;
+    if (timeout > 10) {
+      while(SoftSerial.available())
+      SoftSerial.read();
+      break;
     }
+    delay(50);
+  }
 
-    for (int i=0; i < 7; i++) {
-        int byte = SoftSerial.read();
-        if (byte == -1) {
-            return -1;
-        }
-        CO2Response[i] = byte;
-    }  
-    int high = CO2Response[3];
-    int low = CO2Response[4];
-    unsigned long val = high*256 + low;
+  for (int i=0; i < 7; i++) {
+    int byte = SoftSerial.read();
+    if (byte == -1) {
+      return -1;
+    }
+    CO2Response[i] = byte;
+  }
+  int high = CO2Response[3];
+  int low = CO2Response[4];
+  unsigned long val = high*256 + low;
 
-    return val;
+  return val;
 }
 
 void fillLed(boolean red) {
