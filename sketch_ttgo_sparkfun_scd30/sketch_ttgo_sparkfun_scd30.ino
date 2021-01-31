@@ -2,6 +2,7 @@
 #include "TFT_eSPI.h"
 #include "SPI.h"
 #include "SparkFun_SCD30_Arduino_Library.h"
+#include "TaskScheduler.h"
 // splash screen:
 #include "bmp.h"
 // fonts:
@@ -20,9 +21,12 @@ Now you can convert it to an array using https://tomeko.net/online_tools/file_to
 Fonts as arrays are loaded as tabs.
 */
 
-SCD30 airSensor;
-TFT_eSPI tft = TFT_eSPI(135, 240); // pins defined in User_Setup.h
+void measure();
+Task mainTask(2000, TASK_FOREVER, &measure);
 
+SCD30 scd30;
+TFT_eSPI tft = TFT_eSPI(135, 240); // pins defined in User_Setup.h
+Scheduler runner;
 int co2;
 
 // For long time delay, it is recommended to use shallow sleep, which can effectively reduce the current consumption
@@ -36,6 +40,7 @@ void espDelay(int ms)
 void setup()
 {
   Serial.begin(115200);
+  Wire.setClock(50000); // 50kHz, recommended for SCD30
   Serial.println("SCD30");
   Wire.begin();
   tft.init();
@@ -48,61 +53,66 @@ void setup()
   tft.pushImage(0, 0,  135, 240, c2c);
   espDelay(5000);
 
-  if (airSensor.begin() == false)
-  {
-    Serial.println("Air sensor not detected. Please check wiring. Freezing...");
-    while (1)
-      ;
+  if (scd30.begin() == false) {
+    Serial.println("Air sensor not detected.");
+    while (1);
   }
+  scd30.setAmbientPressure(1000);
+  scd30.setTemperatureOffset(3);
+
+  runner.init();
+  runner.addTask(mainTask);
+  mainTask.enable();
+}
+
+void measure() {
+  if (!scd30.dataAvailable()) {
+    return;
+  }
+
+  Serial.print("co2(ppm):");
+  co2 = scd30.getCO2();
+  Serial.print(co2);
+  Serial.print(" temp(C):");
+  Serial.print(scd30.getTemperature(), 1);
+  Serial.print(" humidity(%):");
+  Serial.print(scd30.getHumidity(), 1);
+  Serial.println();
+
+  if (co2 > 1000) {
+    tft.setTextColor(TFT_BLACK, TFT_RED);
+    tft.fillScreen(TFT_RED);
+  } else if (co2 < 800) { 
+    tft.setTextColor(TFT_BLACK, TFT_GREEN);
+    tft.fillScreen(TFT_GREEN);
+  } else {
+    tft.setTextColor(TFT_BLACK, TFT_ORANGE);
+    tft.fillScreen(TFT_ORANGE);
+  }
+  tft.setTextDatum(MC_DATUM);
+
+  tft.loadFont(Purisa_48);
+  tft.drawString("CO2", tft.width() / 2, 40);
+  tft.drawString(String(co2), tft.width()/2, tft.height()/2);
+  tft.unloadFont(); // Unload the font to recover used RAM
+  
+  tft.loadFont(Purisa_24);
+  tft.drawString("ppm", tft.width() - 55, tft.height()/2 + 40);
+  tft.unloadFont();
+
+
+  tft.loadFont(Purisa_12);
+  if (co2 > 1000) {
+    tft.drawString("Leave room now !", tft.width()- 70, tft.height() - 30);
+  } else if (co2 < 800) { 
+    tft.drawString("All good !", tft.width()- 70, tft.height() - 30);
+  } else {
+    tft.drawString("Open the windows...", tft.width()- 70, tft.height() - 30);
+  }
+  tft.unloadFont();
 }
 
 void loop()
 {
-  if (airSensor.dataAvailable())
-  {
-    
-    Serial.print("co2(ppm):");
-    co2 = airSensor.getCO2();
-    Serial.print(co2);
-
-    Serial.print(" temp(C):");
-    Serial.print(airSensor.getTemperature(), 1);
-
-    Serial.print(" humidity(%):");
-    Serial.print(airSensor.getHumidity(), 1);
-
-    Serial.println();
-
-    if (co2 > 1000) {
-      tft.setTextColor(TFT_BLACK, TFT_RED);
-      tft.fillScreen(TFT_RED);
-    } else if (co2 < 800) { 
-      tft.setTextColor(TFT_BLACK, TFT_GREEN);
-      tft.fillScreen(TFT_GREEN);
-    } else {
-      tft.setTextColor(TFT_BLACK, TFT_ORANGE);
-      tft.fillScreen(TFT_ORANGE);
-    }
-    tft.setTextDatum(MC_DATUM);
-
-    tft.loadFont(Purisa_48);
-    tft.drawString("CO2", tft.width() / 2, 40);
-    tft.drawString(String(co2), tft.width()/2, tft.height()/2);
-    tft.unloadFont(); // Unload the font to recover used RAM
-    
-    tft.loadFont(Purisa_24);
-    tft.drawString("ppm", tft.width() - 55, tft.height()/2 + 40);
-    tft.unloadFont(); // Unload the font to recover used RAM
- 
-    tft.loadFont(Purisa_12);
-    if (co2 > 1000) {
-      tft.drawString("Leave room now !", tft.width()- 70, tft.height() - 30);
-    } else if (co2 < 800) { 
-      tft.drawString("All good !", tft.width()- 70, tft.height() - 30);
-    } else {
-      tft.drawString("Open the windows...", tft.width()- 70, tft.height() - 30);
-    }
-    tft.unloadFont();
-  }
-  delay(2000);
+  runner.execute();
 }
