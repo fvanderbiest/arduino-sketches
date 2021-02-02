@@ -6,8 +6,10 @@
 #include "TaskScheduler.h"
 #include "Bounce2.h"
 #include "FlashStorage.h"
+#include "Adafruit_BMP3XX.h"
 
 // User-level settings:
+#define BRIGHTNESS                        20 // 1-255
 #define MAX_BRIGHTNESS_AT_PPM             2000
 #define SETTINGS_TO_EEPROM_FREQUENCY_MS   10000
 #define DEFAULT_ELEVATION_M               300
@@ -99,8 +101,7 @@ SETTINGS settings;
 FlashStorage(flash_settings, SETTINGS);
 
 boolean settingsChanged = false;
-int BRIGHTNESS = 20; //1-255
-int PRESSURE = 1000;
+int pressure = 0;
 String disp;
 boolean screenRequiresRefresh = true;
 int taux_co2;
@@ -112,9 +113,12 @@ float temp;
 char formattedTemp[4];
 void measure();
 void persistSettings();
-Task mainTask(1000, TASK_FOREVER, &measure);
+void measurePressure();
+Task mainTask(2000, TASK_FOREVER, &measure);
+Task measurePressureTask(10000, TASK_FOREVER, &measurePressure); // every 10 s
 Task settingsToEEPROM(SETTINGS_TO_EEPROM_FREQUENCY_MS, TASK_FOREVER, &persistSettings);
 SCD30 scd30;
+Adafruit_BMP3XX bmp;
 Adafruit_NeoPixel neopixel = Adafruit_NeoPixel(NUMPIXELS, PIN_WS2812, NEO_GRB + NEO_KHZ800);
 Scheduler runner;
 Button ledButton = Button();
@@ -127,6 +131,9 @@ SPRITE resetSprite;
 
 void setup() {
   Serial.begin(115200);
+
+  // Set analog input resolution to max, 12-bits (for BMP sensor)
+  analogReadResolution(12);
 
   settings = flash_settings.read();
   if (settings.valid == false) {
@@ -164,7 +171,13 @@ void setup() {
   if (settings.ledMode > 0) {
     neopixel.show();
   }
-  
+
+  bmp.begin_I2C();
+  bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
+  bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
+  bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
+  bmp.setOutputDataRate(BMP3_ODR_50_HZ);
+
   ssd1306_128x64_i2c_init();
   ssd1306_fillScreen(0x00);
   if (settings.screenMode > 0) {
@@ -202,23 +215,25 @@ void setup() {
     scd30.setAltitudeCompensation(settings.elevation);
   }
 
-  // Current ambient pressure in mBar: 700 to 1200
-  // TODO: measure it !
+  // temporary setting before BMP sensor kicks in:
   scd30.setAmbientPressure(1000);
-
+  
   // Set temperature offset to compensate for self-heating
-  if (scd30.getTemperatureOffset() == 0) {
-    scd30.setTemperatureOffset(3.2);
-  }
+  // Obtained experimentally after 10 min
+  // by substracting scd30.getTemperature with ds18b20 ref temp
+  // with TemperatureOffset set to 0 prior.
+  scd30.setTemperatureOffset(3.7);
 
   runner.init();
 
   runner.addTask(mainTask);
   mainTask.enable();
 
+  runner.addTask(measurePressureTask);
+  measurePressureTask.enable();
+
   runner.addTask(settingsToEEPROM);
   settingsToEEPROM.enable();
-
 }
 
 void refreshLedModeSprite() {
@@ -248,9 +263,32 @@ void persistSettings() {
   }
 }
 
+void measurePressure() {
+  if (!bmp.performReading()) {
+    Serial.println("Failed to perform pressure reading");
+    return;
+  }
+
+  pressure = bmp.pressure / 100;
+  /*
+  Serial.print("Pressure = ");
+  Serial.print(pressure);
+  Serial.println(" hPa");
+  */
+
+  // Set current ambient pressure in mBar (range 700 to 1200)
+  scd30.setAmbientPressure(pressure);
+}
+
 void measure() {
   if (!scd30.dataAvailable()) {
     return;
+  }
+
+  // Set current ambient pressure in mBar (range 700 to 1200)
+  if (pressure < 800) {
+    //delay(200);
+    measurePressure();
   }
 
   taux_co2 = scd30.getCO2();
@@ -262,7 +300,8 @@ void measure() {
     ssd1306_fillScreen(0x00);
     screenRequiresRefresh = false;
   }
-  temp = scd30.getTemperature();
+  temp = bmp.temperature - 2.6; // is more precise than scd30.getTemperature();
+  //temp = scd30.getTemperature();// is incorrect during the first 10 minutes of the sensor warming up
   dtostrf(temp, 4, 1, formattedTemp);
   int taux_hum = scd30.getHumidity();
 
