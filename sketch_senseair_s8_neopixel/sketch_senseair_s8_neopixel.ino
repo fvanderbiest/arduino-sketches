@@ -5,7 +5,7 @@
 #define RX_PIN 3
 #define TX_PIN 4
 #define NUMPIXELS 1
-#define PIN_WS2812 2
+#define PIN_WS2812 7
 #define BRIGHTNESS 50
 #define MEASURE_PERIOD 5000
 
@@ -80,7 +80,11 @@ void blinkLed() {
 void measure() {
   int taux_co2 = getCO2();
 
-  if (taux_co2 < 1000) {
+  if (taux_co2 < 430) {
+    blinkTask.disable();
+    neopixel.fill(neopixel.Color(255, 255, 255), 0, NUMPIXELS);
+    neopixel.show();
+  } else if (taux_co2 < 1000) {
     blinkTask.disable();
     if (taux_co2 < 800) {
       fillLed(false);
@@ -92,7 +96,10 @@ void measure() {
     if (taux_co2 > 2000) {
       blinkTask.setInterval(50);
     } else {
-      blinkTask.setInterval(500-450*(taux_co2-1000)/1000);
+      int period = 500 - 450 * (taux_co2 - 1000) / 1000;
+      if (period != blinkTask.getInterval()) {
+        blinkTask.setInterval(period);
+      }
     }
     blinkTask.enable();
   }
